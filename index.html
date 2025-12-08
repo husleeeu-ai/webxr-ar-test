@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="mn">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebXR AR туршилт</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 100;
+        }
+        #info h3 {
+            margin: 0 0 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h3>🎮 WebXR AR Туршилт</h3>
+        <p>AR горимд орохын тулд "Enter AR" товч дарна уу</p>
+        <p>📱 WebXR дэмждэг төхөөрөмж шаардлагатай</p>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js';
+        import { ARButton } from 'https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/webxr/ARButton.js';
+
+        // Үндсэн тохиргоо
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        
+        const renderer = new THREE.WebGLRenderer({ 
+            alpha: true, 
+            antialias: true 
+        });
+        renderer.xr.enabled = true;
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        // Гэрэлтүүлэг
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(1, 1, 1);
+        scene.add(directionalLight);
+
+        // 1. Куб үүсгэх (улаан)
+        const cubeGeometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+        const cubeMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0xff0000,
+            metalness: 0.5,
+            roughness: 0.3
+        });
+        const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+        cube.position.set(-0.3, 0.1, -1);
+        scene.add(cube);
+
+        // 2. Бөмбөрцөг үүсгэх (ногоон)
+        const sphereGeometry = new THREE.SphereGeometry(0.15, 32, 32);
+        const sphereMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x00ff00,
+            metalness: 0.7,
+            roughness: 0.2
+        });
+        const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+        sphere.position.set(0.3, 0.1, -1);
+        scene.add(sphere);
+
+        // 3. Пирамид үүсгэх (цэнхэр)
+        const coneGeometry = new THREE.ConeGeometry(0.15, 0.3, 4);
+        const coneMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x0099ff,
+            metalness: 0.4,
+            roughness: 0.4
+        });
+        const cone = new THREE.Mesh(coneGeometry, coneMaterial);
+        cone.position.set(0, 0.25, -0.6);
+        scene.add(cone);
+
+        // 4. Цилиндр үүсгэх (шар)
+        const cylinderGeometry = new THREE.CylinderGeometry(0.1, 0.1, 0.3, 32);
+        const cylinderMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0xffff00,
+            metalness: 0.6,
+            roughness: 0.3
+        });
+        const cylinder = new THREE.Mesh(cylinderGeometry, cylinderMaterial);
+        cylinder.position.set(0, 0.1, -1.4);
+        scene.add(cylinder);
+
+        // AR горим товч үүсгэх
+        const arButton = ARButton.createButton(renderer, {
+            requiredFeatures: ['local-floor', 'hit-test'],
+            optionalFeatures: ['dom-overlay'],
+            domOverlay: { root: document.body }
+        });
+        document.body.appendChild(arButton);
+
+        // Өнгө солих функц
+        let colorIndex = 0;
+        const colors = [0xff0000, 0x00ff00, 0x0099ff, 0xffff00, 0xff00ff, 0x00ffff];
+
+        function changeColors() {
+            colorIndex = (colorIndex + 1) % colors.length;
+            cube.material.color.setHex(colors[colorIndex]);
+            sphere.material.color.setHex(colors[(colorIndex + 1) % colors.length]);
+            cone.material.color.setHex(colors[(colorIndex + 2) % colors.length]);
+            cylinder.material.color.setHex(colors[(colorIndex + 3) % colors.length]);
+        }
+
+        // Товшилт үйлдэл
+        window.addEventListener('click', (event) => {
+            if (renderer.xr.isPresenting) {
+                changeColors();
+            }
+        });
+
+        // Анимаци loop
+        let time = 0;
+        renderer.setAnimationLoop(() => {
+            time += 0.01;
+
+            // Куб эргэлт
+            cube.rotation.x += 0.01;
+            cube.rotation.y += 0.02;
+
+            // Бөмбөрцөг bounce
+            sphere.position.y = 0.1 + Math.sin(time * 2) * 0.1;
+
+            // Пирамид эргэлт
+            cone.rotation.y += 0.03;
+
+            // Цилиндр хэлбэлзэл
+            cylinder.scale.y = 1 + Math.sin(time * 3) * 0.2;
+
+            renderer.render(scene, camera);
+        });
+
+        // Цонхны хэмжээ өөрчлөгдөхөд
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Камерын анхны байрлал
+        camera.position.set(0, 1.6, 0);
+
+    </script>
+</body>
+</html>
