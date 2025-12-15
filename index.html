@@ -58,7 +58,7 @@
         directionalLight.position.set(1, 1, 1);
         scene.add(directionalLight);
 
-        // 1. Куб үүсгэх (улаан)
+        // 1. Куб үүсгэх (улаан) - ЭХЛЭЭД ХАРАГДАХГҮЙ
         const cubeGeometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
         const cubeMaterial = new THREE.MeshStandardMaterial({ 
             color: 0xff0000,
@@ -66,10 +66,10 @@
             roughness: 0.3
         });
         const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
-        cube.position.set(-0.3, 0.1, -1);
+        cube.visible = false; // Эхлээд нуух
         scene.add(cube);
 
-        // 2. Бөмбөрцөг үүсгэх (ногоон)
+        // 2. Бөмбөрцөг үүсгэх (ногоон) - ЭХЛЭЭД ХАРАГДАХГҮЙ
         const sphereGeometry = new THREE.SphereGeometry(0.15, 32, 32);
         const sphereMaterial = new THREE.MeshStandardMaterial({ 
             color: 0x00ff00,
@@ -77,10 +77,10 @@
             roughness: 0.2
         });
         const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-        sphere.position.set(0.3, 0.1, -1);
+        sphere.visible = false; // Эхлээд нуух
         scene.add(sphere);
 
-        // 3. Пирамид үүсгэх (цэнхэр)
+        // 3. Пирамид үүсгэх (цэнхэр) - ЭХЛЭЭД ХАРАГДАХГҮЙ
         const coneGeometry = new THREE.ConeGeometry(0.15, 0.3, 4);
         const coneMaterial = new THREE.MeshStandardMaterial({ 
             color: 0x0099ff,
@@ -88,10 +88,10 @@
             roughness: 0.4
         });
         const cone = new THREE.Mesh(coneGeometry, coneMaterial);
-        cone.position.set(0, 0.25, -0.6);
+        cone.visible = false; // Эхлээд нуух
         scene.add(cone);
 
-        // 4. Цилиндр үүсгэх (шар)
+        // 4. Цилиндр үүсгэх (шар) - ЭХЛЭЭД ХАРАГДАХГҮЙ
         const cylinderGeometry = new THREE.CylinderGeometry(0.1, 0.1, 0.3, 32);
         const cylinderMaterial = new THREE.MeshStandardMaterial({ 
             color: 0xffff00,
@@ -99,13 +99,26 @@
             roughness: 0.3
         });
         const cylinder = new THREE.Mesh(cylinderGeometry, cylinderMaterial);
-        cylinder.position.set(0, 0.1, -1.4);
+        cylinder.visible = false; // Эхлээд нуух
         scene.add(cylinder);
+
+        // Hit-test source хадгалах
+        let hitTestSource = null;
+        let hitTestSourceRequested = false;
+        let reticle = null;
+
+        // Газар дээр байрлуулах marker (reticle) үүсгэх
+        const reticleGeometry = new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2);
+        const reticleMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+        reticle = new THREE.Mesh(reticleGeometry, reticleMaterial);
+        reticle.matrixAutoUpdate = false;
+        reticle.visible = false;
+        scene.add(reticle);
 
         // AR горим товч үүсгэх
         const arButton = ARButton.createButton(renderer, {
-            requiredFeatures: ['local-floor', 'hit-test'],
-            optionalFeatures: ['dom-overlay'],
+            requiredFeatures: ['hit-test'],
+            optionalFeatures: ['dom-overlay', 'dom-overlay-for-handheld-ar'],
             domOverlay: { root: document.body }
         });
         document.body.appendChild(arButton);
@@ -122,30 +135,116 @@
             cylinder.material.color.setHex(colors[(colorIndex + 3) % colors.length]);
         }
 
-        // Товшилт үйлдэл
+        // Товших үйлдэл - газар дээр объект байрлуулах
+        let objectsPlaced = false;
+        // Анимацын суурь байршил хадгалах
+        let basePositions = {
+            sphere: { y: 0 }
+        };
+
+        function onSelect() {
+            if (reticle.visible && !objectsPlaced) {
+                // Reticle-ийн байршил дээр объектуудыг байрлуулах
+                const position = new THREE.Vector3();
+                position.setFromMatrixPosition(reticle.matrix);
+
+                // Объектуудыг газрын гадаргуу дээр байрлуулах
+                cube.position.set(position.x - 0.3, position.y + 0.1, position.z);
+                sphere.position.set(position.x + 0.3, position.y + 0.15, position.z);
+                cone.position.set(position.x, position.y + 0.15, position.z - 0.3);
+                cylinder.position.set(position.x, position.y + 0.15, position.z + 0.3);
+
+                // Бөмбөрцгийн суурь өндрийг хадгалах (bounce-д ашиглана)
+                basePositions.sphere.y = position.y + 0.15;
+
+                // Бүх объектыг харагдах болгох
+                cube.visible = true;
+                sphere.visible = true;
+                cone.visible = true;
+                cylinder.visible = true;
+
+                objectsPlaced = true;
+                reticle.visible = false;
+
+                // Мэдээлэл шинэчлэх
+                document.getElementById('info').innerHTML = `
+                    <h3>✅ Амжилттай!</h3>
+                    <p>Дахин товшиход өнгө солино</p>
+                `;
+            } else if (objectsPlaced) {
+                changeColors();
+            }
+        }
+
+        // Controller товших үйлдэл
+        const controller = renderer.xr.getController(0);
+        controller.addEventListener('select', onSelect);
+        scene.add(controller);
+
+        // Дэлгэц товших үйлдэл (утсан дээр)
         window.addEventListener('click', (event) => {
             if (renderer.xr.isPresenting) {
-                changeColors();
+                onSelect();
             }
         });
 
         // Анимаци loop
         let time = 0;
-        renderer.setAnimationLoop(() => {
+        renderer.setAnimationLoop((timestamp, frame) => {
             time += 0.01;
 
-            // Куб эргэлт
-            cube.rotation.x += 0.01;
-            cube.rotation.y += 0.02;
+            // Зөвхөн ХАРАГДАЖ БАЙГАА объектуудыг анимац хийх
+            if (cube.visible) {
+                // Куб эргэлт
+                cube.rotation.x += 0.01;
+                cube.rotation.y += 0.02;
+            }
 
-            // Бөмбөрцөг bounce
-            sphere.position.y = 0.1 + Math.sin(time * 2) * 0.1;
+            if (sphere.visible && objectsPlaced) {
+                // Бөмбөрцөг bounce - СУУРЬ БАЙРШЛААС дээш доош
+                sphere.position.y = basePositions.sphere.y + Math.sin(time * 2) * 0.05;
+            }
 
-            // Пирамид эргэлт
-            cone.rotation.y += 0.03;
+            if (cone.visible) {
+                // Пирамид эргэлт
+                cone.rotation.y += 0.03;
+            }
 
-            // Цилиндр хэлбэлзэл
-            cylinder.scale.y = 1 + Math.sin(time * 3) * 0.2;
+            if (cylinder.visible) {
+                // Цилиндр хэлбэлзэл
+                cylinder.scale.y = 1 + Math.sin(time * 3) * 0.2;
+            }
+
+            // Hit-test (газар олох)
+            if (frame && !objectsPlaced) {
+                const referenceSpace = renderer.xr.getReferenceSpace();
+                const session = renderer.xr.getSession();
+
+                if (!hitTestSourceRequested) {
+                    session.requestReferenceSpace('viewer').then((viewerSpace) => {
+                        session.requestHitTestSource({ space: viewerSpace }).then((source) => {
+                            hitTestSource = source;
+                        });
+                    });
+                    hitTestSourceRequested = true;
+                    document.getElementById('info').innerHTML = `
+                        <h3>📱 Газар харуулаарай</h3>
+                        <p>Цагаан цагираг харагдах хүртэл утсаа хөдөлгөнө үү</p>
+                        <p>Товшиход объект байрлана</p>
+                    `;
+                }
+
+                if (hitTestSource) {
+                    const hitTestResults = frame.getHitTestResults(hitTestSource);
+                    if (hitTestResults.length) {
+                        const hit = hitTestResults[0];
+                        reticle.visible = true;
+                        reticle.matrix.fromArray(hit.getPose(referenceSpace).transform.matrix);
+                    } else {
+                        reticle.visible = false;
+                    }
+                }
+            }
 
             renderer.render(scene, camera);
         });
